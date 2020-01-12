@@ -151,6 +151,75 @@ void testMoveL(AuboDriver &robot_driver)
     }
 }
 
+void testGetRobotPose(AuboDriver &robot_driver)
+{
+    /** Initialize move properties ***/
+    robot_driver.robot_send_service_.robotServiceInitGlobalMoveProfile();
+
+    /** Set Max joint acc and vel***/
+    aubo_robot_namespace::JointVelcAccParam jointMaxAcc;
+    aubo_robot_namespace::JointVelcAccParam jointMaxVelc;
+    for(int i = 0; i < ARM_DOF; i++)
+    {
+        jointMaxAcc.jointPara[i] = MAX_JOINT_ACC;
+        jointMaxVelc.jointPara[i] = MAX_JOINT_VEL;
+    }
+    robot_driver.robot_send_service_.robotServiceSetGlobalMoveJointMaxAcc(jointMaxAcc);
+    robot_driver.robot_send_service_.robotServiceSetGlobalMoveJointMaxVelc(jointMaxVelc);
+
+    int result;
+    aubo_robot_namespace::wayPoint_S wayPoint;
+
+    while(true) {
+      result = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
+      if(result == aubo_robot_namespace::ErrnoSucc) {
+        ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
+          wayPoint.cartPos.position.x, wayPoint.cartPos.position.y, wayPoint.cartPos.position.z,
+          wayPoint.orientation.w, wayPoint.orientation.x, wayPoint.orientation.y, wayPoint.orientation.z);
+      }
+    }
+}
+
+void testMoveLine(AuboDriver &robot_driver) {
+  /** Initialize move properties ***/
+  robot_driver.robot_send_service_.robotServiceInitGlobalMoveProfile();
+
+  /** Set Max joint acc and vel***/
+  aubo_robot_namespace::JointVelcAccParam jointMaxAcc;
+  aubo_robot_namespace::JointVelcAccParam jointMaxVelc;
+  for(int i = 0; i < ARM_DOF; i++)
+  {
+      jointMaxAcc.jointPara[i] = MAX_JOINT_ACC;
+      jointMaxVelc.jointPara[i] = MAX_JOINT_VEL;
+  }
+  robot_driver.robot_send_service_.robotServiceSetGlobalMoveJointMaxAcc(jointMaxAcc);
+  robot_driver.robot_send_service_.robotServiceSetGlobalMoveJointMaxVelc(jointMaxVelc);
+
+  int result;
+  aubo_robot_namespace::wayPoint_S wayPoint;
+  result = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
+  if(result == aubo_robot_namespace::ErrnoSucc) {
+    ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
+      wayPoint.cartPos.position.x, wayPoint.cartPos.position.y, wayPoint.cartPos.position.z,
+      wayPoint.orientation.w, wayPoint.orientation.x, wayPoint.orientation.y, wayPoint.orientation.z);
+
+    wayPoint.cartPos.position.x += 0.05;
+
+    aubo_robot_namespace::wayPoint_S new_wayPoint;
+    std::vector<aubo_robot_namespace::wayPoint_S> wayPointVector;
+
+    result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.jointpos, wayPoint.cartPos.position, wayPoint.orientation, new_wayPoint);
+    ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
+      new_wayPoint.cartPos.position.x, new_wayPoint.cartPos.position.y, new_wayPoint.cartPos.position.z,
+      new_wayPoint.orientation.w, new_wayPoint.orientation.x, new_wayPoint.orientation.y, new_wayPoint.orientation.z);
+
+    result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.cartPos.position, wayPoint.orientation, wayPointVector);
+    ROS_INFO("vector length: %d", wayPointVector.size());
+    result = robot_driver.robot_send_service_.robotServiceLineMove(new_wayPoint, true);
+    ROS_INFO("result %d", result);
+  }
+}
+
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "testAuboAPI");
@@ -173,11 +242,15 @@ int main(int argc, char **argv)
                                              result); /*initialize*/
   if(ret)
   {
-    testMoveJ(robot_driver);
-    testMoveL(robot_driver);
+    // testMoveJ(robot_driver);
+    // testMoveL(robot_driver);
+    // testGetRobotPose(robot_driver);
+    testMoveLine(robot_driver);
   }
   else
-      ROS_INFO("Failed to connect to the robot controller");
+  {
+    ROS_INFO("Failed to connect to the robot controller");
+  }
 
   return 0;
 }
