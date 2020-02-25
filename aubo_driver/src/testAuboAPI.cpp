@@ -151,6 +151,79 @@ void testMoveL(AuboDriver &robot_driver)
     }
 }
 
+void testTrackMove(AuboDriver &robot_driver)
+{
+    /** Initialize move properties ***/
+    robot_driver.robot_send_service_.robotServiceInitGlobalMoveProfile();
+
+    /** Set Max joint acc and vel***/
+    aubo_robot_namespace::JointVelcAccParam jointMaxAcc;
+    aubo_robot_namespace::JointVelcAccParam jointMaxVelc;
+    for(int i = 0; i < ARM_DOF; i++)
+    {
+        jointMaxAcc.jointPara[i] = MAX_JOINT_ACC;
+        jointMaxVelc.jointPara[i] = MAX_JOINT_VEL;
+    }
+    robot_driver.robot_send_service_.robotServiceSetGlobalMoveJointMaxAcc(jointMaxAcc);
+    robot_driver.robot_send_service_.robotServiceSetGlobalMoveJointMaxVelc(jointMaxVelc);
+
+   /** move to inital position **/
+    int ret = robot_driver.robot_send_service_.robotServiceJointMove(initial_poeition, true);
+    if(ret != aubo_robot_namespace::InterfaceCallSuccCode)
+        ROS_ERROR("Failed to move to initial postion, error code:%d", ret);
+
+
+    /** Initialize move properties ***/
+    robot_driver.robot_send_service_.robotServiceInitGlobalMoveProfile();
+
+    /** Set Max END acc and vel**/
+    robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxLineAcc(MAX_END_ACC);
+    robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleAcc(MAX_END_ACC);
+    robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(MAX_END_VEL);
+    robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(MAX_END_VEL);
+
+    int result;
+    aubo_robot_namespace::wayPoint_S wayPoint;
+    result = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
+
+    if(result == aubo_robot_namespace::ErrnoSucc) {
+        int i = 100;
+        ros::Rate r(5);
+        while(ros::ok() && i>0)
+        {
+            result = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
+            // ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
+            // wayPoint.cartPos.position.x, wayPoint.cartPos.position.y, wayPoint.cartPos.position.z,
+            // wayPoint.orientation.w, wayPoint.orientation.x, wayPoint.orientation.y, wayPoint.orientation.z);
+
+            if(i % 2 == 0)
+            {
+                wayPoint.cartPos.position.y += 0.1;
+            }
+            else
+            {
+                wayPoint.cartPos.position.x += 0.1;
+            }
+
+            aubo_robot_namespace::wayPoint_S new_wayPoint;
+            std::vector<aubo_robot_namespace::wayPoint_S> wayPointVector;
+
+            result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.jointpos, wayPoint.cartPos.position, wayPoint.orientation, new_wayPoint);
+            // ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
+            // new_wayPoint.cartPos.position.x, new_wayPoint.cartPos.position.y, new_wayPoint.cartPos.position.z,
+            // new_wayPoint.orientation.w, new_wayPoint.orientation.x, new_wayPoint.orientation.y, new_wayPoint.orientation.z);
+
+            // result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.cartPos.position, wayPoint.orientation, wayPointVector);
+            // ROS_INFO("vector length: %d", wayPointVector.size());
+            // result = robot_driver.robot_send_service_.robotServiceLineMove(new_wayPoint, true);
+            result = robot_driver.robot_send_service_.robotServiceFollowModeJointMove(new_wayPoint.jointpos);
+            ROS_INFO("result %d", result);
+            i -= 1;
+            r.sleep();
+        }
+    }
+}
+
 void testGetRobotPose(AuboDriver &robot_driver)
 {
     /** Initialize move properties ***/
@@ -171,12 +244,12 @@ void testGetRobotPose(AuboDriver &robot_driver)
     aubo_robot_namespace::wayPoint_S wayPoint;
 
     while(true) {
-      result = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
-      if(result == aubo_robot_namespace::ErrnoSucc) {
-        ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
-          wayPoint.cartPos.position.x, wayPoint.cartPos.position.y, wayPoint.cartPos.position.z,
-          wayPoint.orientation.w, wayPoint.orientation.x, wayPoint.orientation.y, wayPoint.orientation.z);
-      }
+        result = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
+        if(result == aubo_robot_namespace::ErrnoSucc) {
+            ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
+                wayPoint.cartPos.position.x, wayPoint.cartPos.position.y, wayPoint.cartPos.position.z,
+                wayPoint.orientation.w, wayPoint.orientation.x, wayPoint.orientation.y, wayPoint.orientation.z);
+        }
     }
 }
 
@@ -199,24 +272,24 @@ void testMoveLine(AuboDriver &robot_driver) {
   aubo_robot_namespace::wayPoint_S wayPoint;
   result = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
   if(result == aubo_robot_namespace::ErrnoSucc) {
-    ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
-      wayPoint.cartPos.position.x, wayPoint.cartPos.position.y, wayPoint.cartPos.position.z,
-      wayPoint.orientation.w, wayPoint.orientation.x, wayPoint.orientation.y, wayPoint.orientation.z);
+        ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
+            wayPoint.cartPos.position.x, wayPoint.cartPos.position.y, wayPoint.cartPos.position.z,
+            wayPoint.orientation.w, wayPoint.orientation.x, wayPoint.orientation.y, wayPoint.orientation.z);
 
-    wayPoint.cartPos.position.x += 0.05;
+        wayPoint.cartPos.position.x += 0.05;
 
-    aubo_robot_namespace::wayPoint_S new_wayPoint;
-    std::vector<aubo_robot_namespace::wayPoint_S> wayPointVector;
+        aubo_robot_namespace::wayPoint_S new_wayPoint;
+        std::vector<aubo_robot_namespace::wayPoint_S> wayPointVector;
 
-    result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.jointpos, wayPoint.cartPos.position, wayPoint.orientation, new_wayPoint);
-    ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
-      new_wayPoint.cartPos.position.x, new_wayPoint.cartPos.position.y, new_wayPoint.cartPos.position.z,
-      new_wayPoint.orientation.w, new_wayPoint.orientation.x, new_wayPoint.orientation.y, new_wayPoint.orientation.z);
+        result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.jointpos, wayPoint.cartPos.position, wayPoint.orientation, new_wayPoint);
+        ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
+        new_wayPoint.cartPos.position.x, new_wayPoint.cartPos.position.y, new_wayPoint.cartPos.position.z,
+        new_wayPoint.orientation.w, new_wayPoint.orientation.x, new_wayPoint.orientation.y, new_wayPoint.orientation.z);
 
-    result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.cartPos.position, wayPoint.orientation, wayPointVector);
-    ROS_INFO("vector length: %d", wayPointVector.size());
-    result = robot_driver.robot_send_service_.robotServiceLineMove(new_wayPoint, true);
-    ROS_INFO("result %d", result);
+        result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.cartPos.position, wayPoint.orientation, wayPointVector);
+        ROS_INFO("vector length: %d", wayPointVector.size());
+        result = robot_driver.robot_send_service_.robotServiceLineMove(new_wayPoint, true);
+        ROS_INFO("result %d", result);
   }
 }
 
@@ -245,12 +318,16 @@ int main(int argc, char **argv)
     // testMoveJ(robot_driver);
     // testMoveL(robot_driver);
     // testGetRobotPose(robot_driver);
-    testMoveLine(robot_driver);
+    // testMoveLine(robot_driver);
+    testTrackMove(robot_driver);
   }
   else
   {
     ROS_INFO("Failed to connect to the robot controller");
   }
+
+  // robot_driver.robot_send_service_.rootServiceRobotMoveControl(aubo_robot_namespace::RobotMoveStop);
+  ROS_INFO("all finish");
 
   return 0;
 }

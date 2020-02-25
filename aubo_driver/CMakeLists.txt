@@ -44,10 +44,14 @@ set(${PROJECT_NAME}_SOURCES2
 set(${PROJECT_NAME}_SOURCES3
     src/testAuboAPI.cpp
 )
+set(${PROJECT_NAME}_SOURCES4
+    src/velocity_control.cpp
+)
 
 add_executable(aubo_driver ${${PROJECT_NAME}_SOURCES1})
 add_executable(testIO ${${PROJECT_NAME}_SOURCES2})
 add_executable(testAuboAPI ${${PROJECT_NAME}_SOURCES3})
+add_executable(velocity_control ${${PROJECT_NAME}_SOURCES4})
 add_executable(aubo_gazebo_driver src/aubo_gazebo_driver.cpp)
 
 #LINK_LIBRARIES(${CMAKE_CURRENT_SOURCE_DIR}/lib)
@@ -55,6 +59,7 @@ add_executable(aubo_gazebo_driver src/aubo_gazebo_driver.cpp)
 target_link_libraries(aubo_driver pthread ${catkin_LIBRARIES} auborobotcontroller otgLib)
 target_link_libraries(testAuboAPI ${catkin_LIBRARIES} auborobotcontroller otgLib)
 target_link_libraries(testIO ${catkin_LIBRARIES} otgLib)
+target_link_libraries(velocity_control ${catkin_LIBRARIES} auborobotcontroller otgLib)
 target_link_libraries(aubo_gazebo_driver ${catkin_LIBRARIES})
 
 
@@ -70,5 +75,6 @@ install(DIRECTORY include/${PROJECT_NAME}/
 add_dependencies(aubo_driver aubo_msgs_gencpp)
 add_dependencies(testIO aubo_msgs_gencpp)
 add_dependencies(testAuboAPI aubo_msgs_gencpp)
+add_dependencies(velocity_control aubo_msgs_gencpp)
 
 

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- start aubo api test node -->
+  <!-- <param name="/external_axis_number" value= "0.0"/> -->
+  <param name="/aubo_driver/server_host" type="str" value="192.168.33.8"/>
+  <!-- <node name="test_aubo_api_node" pkg="aubo_driver" type="testAuboAPI" output="screen"> -->
+  <!-- </node> -->
+
+  <node name="velocity_control_node" pkg="aubo_driver" type="velocity_control" output="screen">
+  </node>
+
+  <!-- Joy controller -->
+  <node pkg="joy" type="joy_node" name="joy_node" output="screen">
+    <param name="dev" type="string" value="/dev/input/js0" />
+    <param name="autorepeat_rate" type="double" value="10" />
+  </node>
+
+  <!-- Joy teleop -->
+  <rosparam command="load" file="$(find aubo_driver)/config/joy_teleop.yaml" />
+  <node pkg="joy_teleop" type="joy_teleop.py" name="joy_teleop_node" output="screen" >
+  </node>
+
+</launch>
