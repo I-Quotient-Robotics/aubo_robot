@@ -13,10 +13,10 @@
 
 using namespace aubo_driver;
 
-#define MAX_END_ACC     2.0                 // unit m/s^2
-#define MAX_END_VEL     0.03                // unit m/s
+#define MAX_END_ACC     1.0                 // unit m/s^2
+#define MAX_END_VEL     0.1                // unit m/s
 #define MAX_JOINT_ACC   100.0/180.0*M_PI    // unit rad/s^2
-#define MAX_JOINT_VEL   30.0/180.0*M_PI     // unit rad/s
+#define MAX_JOINT_VEL   60.0/180.0*M_PI     // unit rad/s
 
 const double THRESHHOLD = 0.000001;
 
@@ -73,20 +73,30 @@ class AuboJogControl {
       int result;
 
       if(msg_timeout_ > 20) {
+        robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(MAX_END_VEL);
+        robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(MAX_END_VEL);
         robot_driver_->robot_send_service_.robotServiceTeachStop();
-      } else if(fabs(twist_.linear.x) > 0.2 && fabs(twist_.linear.x)>fabs(twist_.linear.y)) {
+      } else if(fabs(twist_.linear.x) > 0.02 && fabs(twist_.linear.x)>fabs(twist_.linear.y)) {
+        robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(MAX_END_VEL*fabs(twist_.linear.x));
         robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_X, twist_.linear.x>0?1:0);
-      } else if(fabs(twist_.linear.y) > 0.2 && fabs(twist_.linear.y)>fabs(twist_.linear.x)) {
+      } else if(fabs(twist_.linear.y) > 0.02 && fabs(twist_.linear.y)>fabs(twist_.linear.x)) {
+        robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(MAX_END_VEL*fabs(twist_.linear.y));
         robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_Y, twist_.linear.y>0?1:0);
-      } else if(fabs(twist_.linear.z) > 0.2){
+      } else if(fabs(twist_.linear.z) > 0.02){
+        robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(MAX_END_VEL*fabs(twist_.linear.z));
         robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_Z, twist_.linear.z>0?1:0);
-      } else if(fabs(twist_.angular.x) > 0.2 && fabs(twist_.angular.x)>fabs(twist_.angular.y)) {
+      } else if(fabs(twist_.angular.x) > 0.02 && fabs(twist_.angular.x)>fabs(twist_.angular.y)) {
+        robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(MAX_END_VEL*fabs(twist_.angular.x));
         robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::ROT_X, twist_.angular.x>0?1:0);
-      } else if(fabs(twist_.angular.y) > 0.2 && fabs(twist_.angular.y)>fabs(twist_.angular.x)) {
+      } else if(fabs(twist_.angular.y) > 0.02 && fabs(twist_.angular.y)>fabs(twist_.angular.x)) {
+        robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(MAX_END_VEL*fabs(twist_.angular.y));
         robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::ROT_Y, twist_.angular.y>0?1:0);
-      } else if(fabs(twist_.angular.z) > 0.2) {
+      } else if(fabs(twist_.angular.z) > 0.02) {
+        robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(MAX_END_VEL*fabs(twist_.angular.z));
         robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::ROT_Z, twist_.angular.z>0?1:0);
       } else {
+        robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(MAX_END_VEL);
+        robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(MAX_END_VEL);
         robot_driver_->robot_send_service_.robotServiceTeachStop();
       }
 
