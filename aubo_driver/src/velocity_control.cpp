@@ -1,34 +1,3 @@
-/*
- * Software License Agreement (BSD License)
- *
- * Copyright (c) 2017-2018, AUBO Robotics
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- *       * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *       * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *       * Neither the name of the Southwest Research Institute, nor the names
- *       of its contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
-
 #include "aubo_driver/aubo_driver.h"
 #include "aubo_driver.cpp"
 
@@ -44,102 +13,97 @@
 
 using namespace aubo_driver;
 
-#define MAX_JOINT_ACC 100.0/180.0*M_PI  //unit rad/s^2
-#define MAX_JOINT_VEL 50.0/180.0*M_PI   //unit rad/s
-#define MAX_END_ACC    4                // unit m/s^2
-#define MAX_END_VEL    2                // unit m/s
-
-geometry_msgs::Twist twist;
-
+#define MAX_END_ACC     2.0                 // unit m/s^2
+#define MAX_END_VEL     0.03                // unit m/s
+#define MAX_JOINT_ACC   100.0/180.0*M_PI    // unit rad/s^2
+#define MAX_JOINT_VEL   30.0/180.0*M_PI     // unit rad/s
 
 const double THRESHHOLD = 0.000001;
-bool roadPointCompare(double *point1, double *point2)
-{
-    /** If there is a enough difference, then it will return true. **/
-    bool ret = false;
-    for(int i = 0; i < 6;i++)
-    {
-        if(fabs(point1[i] - point2[i]) >= THRESHHOLD)
-        {
-            ret = true;
-            break;
-        }
-    }
-    return ret;
-}
 
+class AuboJogControl {
+  public:
+    int msg_timeout_;
 
-void VelocityControl(AuboDriver &robot_driver) {
-  /** Initialize move properties ***/
-  robot_driver.robot_send_service_.robotServiceInitGlobalMoveProfile();
+    AuboDriver *robot_driver_;
+    geometry_msgs::Twist twist_;
 
-  /** Set Max joint acc and vel***/
-  aubo_robot_namespace::JointVelcAccParam jointMaxAcc;
-  aubo_robot_namespace::JointVelcAccParam jointMaxVelc;
-  for(int i = 0; i < ARM_DOF; i++) {
-    jointMaxAcc.jointPara[i] = MAX_JOINT_ACC;
-    jointMaxVelc.jointPara[i] = MAX_JOINT_VEL;
-  }
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveJointMaxAcc(jointMaxAcc);
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveJointMaxVelc(jointMaxVelc);
+  public:
+    AuboJogControl(AuboDriver *driver) {
+      robot_driver_ = driver;
 
-   /** move to inital position **/
-  // int ret = robot_driver.robot_send_service_.robotServiceJointMove(initial_poeition, true);
-  // if(ret != aubo_robot_namespace::InterfaceCallSuccCode)
-  //   ROS_ERROR("Failed to move to initial postion, error code:%d", ret);
-
-
-  /** Initialize move properties ***/
-  robot_driver.robot_send_service_.robotServiceInitGlobalMoveProfile();
-
-  /** Set Max END acc and vel**/
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxLineAcc(MAX_END_ACC);
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleAcc(MAX_END_ACC);
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(MAX_END_VEL);
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(MAX_END_VEL);
-
-  int result;
-  aubo_robot_namespace::wayPoint_S wayPoint;
-  result = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
-
-  if(result == aubo_robot_namespace::ErrnoSucc) {
-    int i = 100;
-    ros::Rate r(5);
-    while(ros::ok() && i>0) {
-      result = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
-      // ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
-      // wayPoint.cartPos.position.x, wayPoint.cartPos.position.y, wayPoint.cartPos.position.z,
-      // wayPoint.orientation.w, wayPoint.orientation.x, wayPoint.orientation.y, wayPoint.orientation.z);
-
-      if(i % 2 == 0) {
-        wayPoint.cartPos.position.y += 0.1;
-      } else {
-        wayPoint.cartPos.position.x += 0.1;
+      /** Set Max joint acc and vel***/
+      aubo_robot_namespace::JointVelcAccParam joint_max_acc_;
+      aubo_robot_namespace::JointVelcAccParam joint_max_velc_;
+      for(int i = 0; i < 6; i++) {
+        joint_max_acc_.jointPara[i] = MAX_JOINT_ACC;
+        joint_max_velc_.jointPara[i] = MAX_JOINT_VEL;
       }
 
-      aubo_robot_namespace::wayPoint_S new_wayPoint;
-      std::vector<aubo_robot_namespace::wayPoint_S> wayPointVector;
+      /** Initialize move properties ***/
+      robot_driver_->robot_send_service_.robotServiceInitGlobalMoveProfile();
 
-      result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.jointpos, wayPoint.cartPos.position, wayPoint.orientation, new_wayPoint);
-      // ROS_INFO("Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
-      // new_wayPoint.cartPos.position.x, new_wayPoint.cartPos.position.y, new_wayPoint.cartPos.position.z,
-      // new_wayPoint.orientation.w, new_wayPoint.orientation.x, new_wayPoint.orientation.y, new_wayPoint.orientation.z);
+      /** Set Max END acc and vel**/
+      robot_driver_->robot_send_service_.robotServiceSetGlobalMoveJointMaxAcc(joint_max_acc_);
+      robot_driver_->robot_send_service_.robotServiceSetGlobalMoveJointMaxVelc(joint_max_velc_);
 
-      // result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.cartPos.position, wayPoint.orientation, wayPointVector);
-      // ROS_INFO("vector length: %d", wayPointVector.size());
-      // result = robot_driver.robot_send_service_.robotServiceLineMove(new_wayPoint, true);
-      result = robot_driver.robot_send_service_.robotServiceFollowModeJointMove(new_wayPoint.jointpos);
-      ROS_INFO("result %d", result);
-      i -= 1;
-      r.sleep();
+      robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxLineAcc(MAX_END_ACC);
+      robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(MAX_END_VEL);
+
+      robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleAcc(MAX_END_ACC);
+      robot_driver_->robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(MAX_END_VEL);
     }
-  }
-}
 
-void VelocityControlCallback(const geometry_msgs::Twist::ConstPtr &msg) {
-  ROS_INFO("get info");
-  twist = *msg;
-}
+    ~AuboJogControl() {
+      robot_driver_->robot_send_service_.robotServiceTeachStop();
+    }
+
+    bool RoadPointCompare(double *point1, double *point2) {
+      /** If there is a enough difference, then it will return true. **/
+      bool ret = false;
+      for(int i = 0; i < 6;i++) {
+        if(fabs(point1[i] - point2[i]) >= THRESHHOLD) {
+          ret = true;
+          break;
+        }
+      }
+      return ret;
+    }
+
+    void UpdateVelocityCommand() {
+      int result;
+
+      if(msg_timeout_ > 20) {
+        robot_driver_->robot_send_service_.robotServiceTeachStop();
+      } else if(fabs(twist_.linear.x) > 0.2 && fabs(twist_.linear.x)>fabs(twist_.linear.y)) {
+        robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_X, twist_.linear.x>0?1:0);
+      } else if(fabs(twist_.linear.y) > 0.2 && fabs(twist_.linear.y)>fabs(twist_.linear.x)) {
+        robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_Y, twist_.linear.y>0?1:0);
+      } else if(fabs(twist_.linear.z) > 0.2){
+        robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_Z, twist_.linear.z>0?1:0);
+      } else if(fabs(twist_.angular.x) > 0.2 && fabs(twist_.angular.x)>fabs(twist_.angular.y)) {
+        robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::ROT_X, twist_.angular.x>0?1:0);
+      } else if(fabs(twist_.angular.y) > 0.2 && fabs(twist_.angular.y)>fabs(twist_.angular.x)) {
+        robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::ROT_Y, twist_.angular.y>0?1:0);
+      } else if(fabs(twist_.angular.z) > 0.2) {
+        robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::ROT_Z, twist_.angular.z>0?1:0);
+      } else {
+        robot_driver_->robot_send_service_.robotServiceTeachStop();
+      }
+
+      msg_timeout_ += 1;
+
+      // ROS_INFO("XYZ %.3f, %.3f, %.3f; RPY %.3f, %.3f, %.3f",
+      //           twist_.linear.x, twist_.linear.y, twist_.linear.z,
+      //           twist_.angular.x, twist_.angular.y, twist_.angular.z);
+    }
+
+    void VelocityControlCallback(const geometry_msgs::Twist::ConstPtr &msg) {
+      // ROS_INFO("get info");
+
+      msg_timeout_ = 0;
+      twist_ = *msg;
+    }
+};
 
 int main(int argc, char **argv) {
   ros::init(argc, argv, "velocity_control");
@@ -161,64 +125,27 @@ int main(int argc, char **argv) {
                                                             1000,    /*default */
                                                             result); /*initialize*/
 
-  /** Initialize move properties ***/
-  robot_driver.robot_send_service_.robotServiceInitGlobalMoveProfile();
+  AuboJogControl aubo_jog_control(&robot_driver);
 
-  /** Set Max joint acc and vel***/
-  aubo_robot_namespace::JointVelcAccParam jointMaxAcc;
-  aubo_robot_namespace::JointVelcAccParam jointMaxVelc;
-  for(int i = 0; i < ARM_DOF; i++) {
-    jointMaxAcc.jointPara[i] = MAX_JOINT_ACC;
-    jointMaxVelc.jointPara[i] = MAX_JOINT_VEL;
-  }
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveJointMaxAcc(jointMaxAcc);
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveJointMaxVelc(jointMaxVelc);
+  ros::Subscriber velocity_control_sub = nh.subscribe("velocity_control", 10, &AuboJogControl::VelocityControlCallback, &aubo_jog_control);
 
-   /** move to inital position **/
-  // ret = robot_driver.robot_send_service_.robotServiceJointMove(initial_poeition, true);
-  // if(ret != aubo_robot_namespace::InterfaceCallSuccCode)
-  //   ROS_ERROR("Failed to move to initial postion, error code:%d", ret);
-
-
-  /** Initialize move properties ***/
-  robot_driver.robot_send_service_.robotServiceInitGlobalMoveProfile();
-
-  /** Set Max END acc and vel**/
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxLineAcc(MAX_END_ACC);
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleAcc(MAX_END_ACC);
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(MAX_END_VEL);
-  robot_driver.robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(MAX_END_VEL);
-
-  ros::Subscriber velocity_control_sub = nh.subscribe("velocity_control", 10, VelocityControlCallback);
-
-  aubo_robot_namespace::wayPoint_S wayPoint;
-  int result_1 = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
+  // aubo_robot_namespace::wayPoint_S wayPoint;
+  // int result_1 = robot_driver_->robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
   while(ros::ok()) {
-    result_1 = robot_driver.robot_send_service_.robotServiceGetCurrentWaypointInfo(wayPoint);
-    ROS_INFO( "Get pos %lf %lf %lf, orient %lf %lf %lf %lf",
-              wayPoint.cartPos.position.x, wayPoint.cartPos.position.y, wayPoint.cartPos.position.z,
-              wayPoint.orientation.w, wayPoint.orientation.x, wayPoint.orientation.y, wayPoint.orientation.z);
-
-    wayPoint.cartPos.position.x += twist.linear.x;
-
-    aubo_robot_namespace::wayPoint_S new_wayPoint;
-    std::vector<aubo_robot_namespace::wayPoint_S> wayPointVector;
-
-    result_1 = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.jointpos, wayPoint.cartPos.position, wayPoint.orientation, new_wayPoint);
-    ROS_INFO("New pos %lf %lf %lf, orient %lf %lf %lf %lf",
-    new_wayPoint.cartPos.position.x, new_wayPoint.cartPos.position.y, new_wayPoint.cartPos.position.z,
-    new_wayPoint.orientation.w, new_wayPoint.orientation.x, new_wayPoint.orientation.y, new_wayPoint.orientation.z);
-
-    if(roadPointCompare(wayPoint.jointpos, new_wayPoint.jointpos)) {
-      result_1 = robot_driver.robot_send_service_.robotServiceLineMove(new_wayPoint, true);
-      // result_1 = robot_driver.robot_send_service_.robotServiceFollowModeJointMove(new_wayPoint.jointpos);
-      ROS_INFO("go result %d", result_1);
-    }
-
+    // if(abs(twist.linear.x) > 0.2 && abs(twist.linear.x)>abs(twist.linear.y)) {
+    //   robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_X, twist.linear.x>0?1:0);
+    // } else if(abs(twist.linear.y) > 0.2 && abs(twist.linear.y)>abs(twist.linear.x)) {
+    //   robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_Y, twist.linear.y>0?1:0);
+    // } else if(abs(twist.linear.z) > 0.2){
+    //   robot_driver_->robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_Z, twist.linear.z>0?1:0);
+    // } else {
+    //   robot_driver_->robot_send_service_.robotServiceTeachStop();
+    // }
+    aubo_jog_control.UpdateVelocityCommand();
     ros::spinOnce();
   }
 
-  // robot_driver.robot_send_service_.rootServiceRobotMoveControl(aubo_robot_namespace::RobotMoveStop);
+  // robot_driver_->robot_send_service_.rootServiceRobotMoveControl(aubo_robot_namespace::RobotMoveStop);
   ROS_INFO("all finish");
 
   return 0;

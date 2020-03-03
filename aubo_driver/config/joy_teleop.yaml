@@ -7,15 +7,15 @@ teleop:
     axis_mappings:
       -
         axis: 0           # 左摇杆纵轴
-        target: linear.x  # 前进、倒退
-        scale: 0.2        # 速度比例（0.5 意味着，最小速度为-0.5，最大为0.5
+        target: linear.y  # 前进、倒退
+        scale: 1          # 速度比例（0.5 意味着，最小速度为-0.5，最大为0.5
       -
         axis: 2           # 右摇杆横轴
-        target: linear.y  # 左右平移
-        scale: 0.2        # 速度比例（0.5 意味着，最小速度为-0.5，最大为0.5
+        target: linear.x  # 左右平移
+        scale: 1          # 速度比例（0.5 意味着，最小速度为-0.5，最大为0.5
       -
         axis: 1           # 左摇杆横轴
-        target: angular.z # 左右旋转
+        target: linear.z  # 左右旋转
         scale: 1          # 速度比例（1.0 意味着，最小速度为-1.0，最大为1.0
   angular_control:
     type: topic
@@ -25,15 +25,15 @@ teleop:
     axis_mappings:
       -
         axis: 0           # 左摇杆纵轴
-        target: linear.x  # 前进、倒退
-        scale: 0.5        # 速度比例（0.5 意味着，最小速度为-0.5，最大为0.5
+        target: angular.x # 前进、倒退
+        scale: 1          # 速度比例（0.5 意味着，最小速度为-0.5，最大为0.5
       -
         axis: 2           # 右摇杆横轴
-        target: linear.y  # 左右平移
-        scale: 0.5        # 速度比例（0.5 意味着，最小速度为-0.5，最大为0.5
+        target: angular.z # 左右平移
+        scale: 1          # 速度比例（0.5 意味着，最小速度为-0.5，最大为0.5
       -
         axis: 1           # 左摇杆横轴
-        target: angular.z # 左右旋转
+        target: angular.y # 左右旋转
         scale: 1          # 速度比例（1.0 意味着，最小速度为-1.0，最大为1.0
 
   change_none:
