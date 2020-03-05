@@ -139,6 +139,9 @@ int main(int argc, char **argv) {
                                                             1000,               // default
                                                             result);            // initialize
 
+  int res = robot_driver.robot_send_service_.robotServiceEnterTcp2CanbusMode();
+  ROS_INFO("test %d", res);
+
   AuboJogControl aubo_jog_control(&robot_driver);
 
   ros::Subscriber velocity_control_sub = nh.subscribe("velocity_control", 10, &AuboJogControl::VelocityControlCallback, &aubo_jog_control);

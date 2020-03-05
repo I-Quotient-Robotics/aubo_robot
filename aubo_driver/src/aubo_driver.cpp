@@ -75,6 +75,8 @@ AuboDriver::AuboDriver(int num = 0):buffer_size_(400),io_flag_delay_(0.02),data_
     ik_srv_ = nh_.advertiseService("/aubo_driver/get_ik",&AuboDriver::getIK, this);
     fk_srv_ = nh_.advertiseService("/aubo_driver/get_fk",&AuboDriver::getFK, this);
 
+    tool_update_srv_ = nh_.advertiseService("/aubo_driver/update_tool_param", &AuboDriver::updateToolParam, this);
+
     /** subscribe topics **/
     trajectory_execution_subs_ = nh_.subscribe("trajectory_execution_event", 10, &AuboDriver::trajectoryExecutionCallback,this);
     robot_control_subs_ = nh_.subscribe("robot_control", 10, &AuboDriver::robotControlCallback,this);
@@ -207,6 +209,21 @@ void AuboDriver::timerCallback(const ros::TimerEvent& e)
                 joints.data[i] = target_point_[i];
             }
             joint_target_pub_.publish(joints);
+        }
+    }
+    else if(control_mode_ == aubo_driver::Teach)
+    {
+        teach_msg_timeout_ += 1;
+        if(teach_msg_timeout_ > 10)
+        {
+            // if no new message in 10 loops, stop move and reset max velocity
+            robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(TMAX_END_VEL);
+            robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(TMAX_END_VEL);
+            robot_send_service_.robotServiceTeachStop();
+            teach_msg_timeout_ = 0;
+
+            // switch back to SendTargetGoal mode
+            control_mode_ = aubo_driver::SendTargetGoal;
         }
     }
 }
@@ -447,34 +464,90 @@ void AuboDriver::updateControlStatus()
     }
 }
 
-void AuboDriver::teachCallback(const std_msgs::Float32MultiArray::ConstPtr &msg)
+// void AuboDriver::teachCallback(const std_msgs::Float32MultiArray::ConstPtr &msg)
+// {
+//     if(control_mode_ == aubo_driver::Teach)
+//     {
+//         double type = msg->data[0];
+//         double teachMode = msg->data[1];
+//         if(type == 0)
+//         {
+//             //0 for Aubo API;
+//             if(controller_connected_flag_)
+//             {
+//                 // robot_send_service_.robotServiceJointMove(joints, false);
+//             }
+//             else
+//             {
+//                 //update the current joint angle directly
+//                 //                memcpy(current_joints_, joints, sizeof(double) * axis_number_);
+//             }
+//         }
+//         else
+//         {
+//             //1 for MoveIt
+//         }
+//     }
+// }
+
+void AuboDriver::teachCallback(const geometry_msgs::Twist::ConstPtr &msg)
 {
-    if(control_mode_ == aubo_driver::Teach)
+    // switch mode to Teach automatically
+    if(control_mode_ != aubo_driver::Teach)
     {
-        double type = msg->data[0];
-        double teachMode = msg->data[1];
-        if(type == 0)
-        {
-            //0 for Aubo API;
-            if(controller_connected_flag_)
-            {
-                // robot_send_service_.robotServiceJointMove(joints, false);
-            }
-            else
-            {
-                //update the current joint angle directly
-                //                memcpy(current_joints_, joints, sizeof(double) * axis_number_);
-            }
-        }
-        else
-        {
-            //1 for MoveIt
-        }
+        control_mode_ = aubo_driver::Teach;
     }
+
+    if(fabs(msg->linear.x) > TJOYSTICK_THRESHOLD && fabs(msg->linear.x)>fabs(msg->linear.y))
+    {
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(TMAX_END_VEL*fabs(msg->linear.x));
+        robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_X, msg->linear.x>0?1:0);
+    }
+    else if(fabs(msg->linear.y) > TJOYSTICK_THRESHOLD && fabs(msg->linear.y)>fabs(msg->linear.x))
+    {
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(TMAX_END_VEL*fabs(msg->linear.y));
+        robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_Y, msg->linear.y>0?1:0);
+    }
+    else if(fabs(msg->linear.z) > TJOYSTICK_THRESHOLD)
+    {
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(TMAX_END_VEL*fabs(msg->linear.z));
+        robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::MOV_Z, msg->linear.z>0?1:0);
+    }
+    else if(fabs(msg->angular.x) > TJOYSTICK_THRESHOLD && fabs(msg->angular.x)>fabs(msg->angular.y))
+    {
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(TMAX_END_VEL*fabs(msg->angular.x));
+        robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::ROT_X, msg->angular.x>0?1:0);
+    }
+    else if(fabs(msg->angular.y) > TJOYSTICK_THRESHOLD && fabs(msg->angular.y)>fabs(msg->angular.x))
+    {
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(TMAX_END_VEL*fabs(msg->angular.y));
+        robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::ROT_Y, msg->angular.y>0?1:0);
+    }
+    else if(fabs(msg->angular.z) > TJOYSTICK_THRESHOLD)
+    {
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(TMAX_END_VEL*fabs(msg->angular.z));
+        robot_send_service_.robotServiceTeachStart(aubo_robot_namespace::ROT_Z, msg->angular.z>0?1:0);
+    }
+    else
+    {
+        // no vaild data come in, stop arm and reset linear & angular max velocity
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(TMAX_END_VEL);
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(TMAX_END_VEL);
+        robot_send_service_.robotServiceTeachStop();
+    }
+
+    teach_msg_timeout_ = 0;
+
+    // ROS_INFO("get twist message");
+    // ROS_INFO("XYZ %.3f, %.3f, %.3f; RPY %.3f, %.3f, %.3f",
+    //         msg->linear.x, msg->linear.y, msg->linear.z,
+    //         msg->angular.x, msg->angular.y, msg->angular.z);
 }
 
 void AuboDriver::AuboAPICallback(const std_msgs::Float32MultiArray::ConstPtr &msg)
 {
+    // switch to SendTargetGoal mode automatically
+    control_mode_ = aubo_driver::SendTargetGoal;
     if(control_mode_ == aubo_driver::SendTargetGoal)
     {
         //ROS_INFO("goal=[%f,%f,%f,%f,%f,%f]",msg->data[0],msg->data[1],msg->data[2],msg->data[3],msg->data[4],msg->data[5]);
@@ -582,6 +655,55 @@ void AuboDriver::run()
             control_option_ = aubo_driver::AuboAPI;
             ROS_WARN("Failed to switch to ros-controller, the robot is still controlled by the robot controller!");
         }
+
+        aubo_robot_namespace::ROBOT_SERVICE_STATE res;
+        aubo_robot_namespace::ToolDynamicsParam toolDynamicsParam;
+        memset(&toolDynamicsParam, 0, sizeof(toolDynamicsParam));
+        // toolDynamicsParam.positionZ = 0.45;
+        // toolDynamicsParam.payload = 1.0;
+        robot_send_service_.rootServiceRobotStartup( toolDynamicsParam,  // tool dynamics paramters
+                                                                6,                  // collision class
+                                                                true,               // is allowed to read robot pose
+                                                                true,               // default
+                                                                1000,               // default
+                                                                res);            // initialize
+
+        robot_send_service_.robotServiceInitGlobalMoveProfile();
+
+        aubo_robot_namespace::JointVelcAccParam joint_max_acc;
+        aubo_robot_namespace::JointVelcAccParam joint_max_velc;
+        for(int i = 0; i < 6; i++) {
+        joint_max_acc.jointPara[i] = TMAX_JOINT_ACC;
+        joint_max_velc.jointPara[i] = TMAX_JOINT_VEL;
+        }
+        robot_send_service_.robotServiceSetGlobalMoveJointMaxAcc(joint_max_acc);
+        robot_send_service_.robotServiceSetGlobalMoveJointMaxVelc(joint_max_velc);
+
+        // set max end-tool linear acceleration and velocity
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxLineAcc(TMAX_END_ACC);
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxLineVelc(TMAX_END_VEL);
+
+        // set max end-tool angular acceleration and velocity
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleAcc(TMAX_END_ACC);
+        robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(TMAX_END_VEL);
+
+        aubo_robot_namespace::ToolKinematicsParam tool_kinematics_param;
+        tool_kinematics_param.toolInEndPosition = {x:0.0, y:0.0, z:0.61};
+        tool_kinematics_param.toolInEndOrientation = {w:1.0, x:0.0, y:0.0, z:0.0};
+        int result = robot_send_service_.robotServiceSetToolKinematicsParam(tool_kinematics_param);
+        ROS_INFO("set tool kinematics params result %d", result);
+
+        // set jog control end-tool coordinate
+        aubo_robot_namespace::CoordCalibrateByJointAngleAndTool tool_coordinate;
+        tool_coordinate.coordType = aubo_robot_namespace::EndCoordinate;
+        result = robot_send_service_.robotServiceSetTeachCoordinateSystem(tool_coordinate);
+        ROS_INFO("set teach coordinate system result %d", result);
+
+        robot_send_service_.robotServiceGetToolKinematicsParam(tool_kinematics_param);
+        ROS_INFO("get twist message");
+        ROS_INFO("XYZ %.3f, %.3f, %.3f; WXYZ %.3f, %.3f, %.3f, %.3f",
+                    tool_kinematics_param.toolInEndPosition.x, tool_kinematics_param.toolInEndPosition.y, tool_kinematics_param.toolInEndPosition.z,
+                    tool_kinematics_param.toolInEndOrientation.w, tool_kinematics_param.toolInEndOrientation.x, tool_kinematics_param.toolInEndOrientation.y, tool_kinematics_param.toolInEndOrientation.z);
 
         ret = robot_receive_service_.robotServiceGetCurrentWaypointInfo(rs.wayPoint_);
         if(ret == aubo_robot_namespace::InterfaceCallSuccCode)
@@ -832,5 +954,45 @@ bool AuboDriver::getIK(aubo_msgs::GetIKRequest& req, aubo_msgs::GetIKResponse& r
     resp.joint.push_back(wayPoint.jointpos[5]);
 }
 
+bool AuboDriver::updateToolParam(aubo_msgs::UpdateToolParamRequest& req, aubo_msgs::UpdateToolParamResponse& resp)
+{
+    int result;
+
+    aubo_robot_namespace::ToolKinematicsParam tool_kinematics_param;
+    tool_kinematics_param.toolInEndPosition = {x:req.pose.translation.x, y:req.pose.translation.y, z:req.pose.translation.z};
+    tool_kinematics_param.toolInEndOrientation = {w:req.pose.rotation.w, x:req.pose.rotation.x, y:req.pose.rotation.y, z:req.pose.rotation.z};
+    // result = robot_send_service_.robotServiceSetToolKinematicsParam(tool_kinematics_param);
+    ROS_INFO("set tool kinematics params result %d", result);
+    ROS_INFO("tool kinematics param: XYZ %.3f %.3f %.3f, WXYZ %.3f %.3f %.3f %.3f",
+            tool_kinematics_param.toolInEndPosition.x, tool_kinematics_param.toolInEndPosition.y, tool_kinematics_param.toolInEndPosition.z,
+            tool_kinematics_param.toolInEndOrientation.w, tool_kinematics_param.toolInEndOrientation.x, tool_kinematics_param.toolInEndOrientation.y, tool_kinematics_param.toolInEndOrientation.z);
+
+    if(result != 0)
+    {
+        resp.result = "Failed on kinematics param set";
+    }
+
+    aubo_robot_namespace::ToolDynamicsParam tool_dynamics_param;
+    tool_dynamics_param.positionX = req.inertia.com.x;
+    tool_dynamics_param.positionY = req.inertia.com.y;
+    tool_dynamics_param.positionZ = req.inertia.com.z;
+    tool_dynamics_param.payload = req.inertia.m;
+    tool_dynamics_param.toolInertia = {xx:req.inertia.ixx, xy:req.inertia.ixy, xz:req.inertia.ixz, yy:req.inertia.iyy, yz:req.inertia.iyz, zz:req.inertia.izz};
+    // result = robot_send_service_.robotServiceSetToolDynamicsParam(tool_dynamics_param);
+    ROS_INFO("set tool dynamics params result %d", result);
+    ROS_INFO("tool dynamics param: Mass %.3f, COM %.3f %.3f %.3f, Inertia %.3f %.3f %.3f %.3f %.3f %.3f",
+            tool_dynamics_param.payload,
+            tool_dynamics_param.positionX, tool_dynamics_param.positionY, tool_dynamics_param.positionZ,
+            tool_dynamics_param.toolInertia.xx, tool_dynamics_param.toolInertia.xy, tool_dynamics_param.toolInertia.xz,
+            tool_dynamics_param.toolInertia.yy, tool_dynamics_param.toolInertia.yz, tool_dynamics_param.toolInertia.zz);
+
+    if(result != 0)
+    {
+        resp.result = "Failed on dynamics param set";
+    }
+
+    resp.result = "OK, all set";
+    return true;
 }
 
+}

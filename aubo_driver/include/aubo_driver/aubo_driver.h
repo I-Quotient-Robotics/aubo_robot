@@ -12,6 +12,7 @@
 #include <std_msgs/UInt8.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Int32MultiArray.h>
+#include <geometry_msgs/Twist.h>
 #include <aubo_msgs/SetIO.h>
 #include <aubo_msgs/SetPayload.h>
 #include <aubo_msgs/SetIORequest.h>
@@ -22,6 +23,7 @@
 #include <aubo_msgs/GetIK.h>
 #include <aubo_msgs/GetIKRequest.h>
 #include <aubo_msgs/GetIKResponse.h>
+#include <aubo_msgs/UpdateToolParam.h>
 #include <aubo_msgs/IOState.h>
 #include <aubo_msgs/Digital.h>
 #include <aubo_msgs/Analog.h>
@@ -45,6 +47,14 @@
 #define AMAX 10000
 //#define JMAX 40000
 #define JMAX 40000
+
+// Jog Control param
+#define TMAX_END_ACC     0.5                 // unit m/s^2
+#define TMAX_END_VEL     0.2                 // unit m/s
+#define TMAX_JOINT_ACC   100.0/180.0*M_PI    // unit rad/s^2
+#define TMAX_JOINT_VEL   100.0/180.0*M_PI    // unit rad/s
+
+#define TJOYSTICK_THRESHOLD 0.02
 
 //#define LOG_INFO_DEBUG
 
@@ -104,6 +114,8 @@ namespace aubo_driver
             bool getFK(aubo_msgs::GetFKRequest& req, aubo_msgs::GetFKResponse& resp);
             bool getIK(aubo_msgs::GetIKRequest& req, aubo_msgs::GetIKResponse& resp);
 
+            bool updateToolParam(aubo_msgs::UpdateToolParamRequest& req, aubo_msgs::UpdateToolParamResponse& resp);
+
             const int UPDATE_RATE_ = 400;
             const int TIMER_SPAN_ = 50;
             const double THRESHHOLD = 0.000001;
@@ -137,7 +149,8 @@ namespace aubo_driver
             void trajectoryExecutionCallback(const std_msgs::String::ConstPtr &msg);
             void robotControlCallback(const std_msgs::String::ConstPtr &msg);
             void AuboAPICallback(const std_msgs::Float32MultiArray::ConstPtr &msg);
-            void teachCallback(const std_msgs::Float32MultiArray::ConstPtr &msg);
+            // void teachCallback(const std_msgs::Float32MultiArray::ConstPtr &msg);
+            void teachCallback(const geometry_msgs::Twist::ConstPtr &msg);
             void timerCallback(const ros::TimerEvent& e);
             bool setRobotJointsByMoveIt();
             void controllerSwitchCallback(const std_msgs::Int32::ConstPtr &msg);
@@ -166,6 +179,9 @@ namespace aubo_driver
             ros::Timer timer_;
             ros::Timer io_publish_timer;
 
+            // update tool param service
+            ros::ServiceServer tool_update_srv_;
+
             ros::ServiceServer io_srv_;
             ros::ServiceServer ik_srv_;
             ros::ServiceServer fk_srv_;
@@ -178,6 +194,8 @@ namespace aubo_driver
             int collision_class_;
             std_msgs::Int32MultiArray rib_status_;
             industrial_msgs::RobotStatus robot_status_;
+
+            int teach_msg_timeout_;
     };
 }
 

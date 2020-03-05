@@ -287,7 +287,7 @@ void testMoveLine(AuboDriver &robot_driver) {
         new_wayPoint.orientation.w, new_wayPoint.orientation.x, new_wayPoint.orientation.y, new_wayPoint.orientation.z);
 
         result = robot_driver.robot_send_service_.robotServiceRobotIk(wayPoint.cartPos.position, wayPoint.orientation, wayPointVector);
-        ROS_INFO("vector length: %d", wayPointVector.size());
+        ROS_INFO("vector length: %ld", wayPointVector.size());
         result = robot_driver.robot_send_service_.robotServiceLineMove(new_wayPoint, true);
         ROS_INFO("result %d", result);
   }
