@@ -687,23 +687,11 @@ void AuboDriver::run()
         robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleAcc(TMAX_END_ACC);
         robot_send_service_.robotServiceSetGlobalMoveEndMaxAngleVelc(TMAX_END_VEL);
 
-        aubo_robot_namespace::ToolKinematicsParam tool_kinematics_param;
-        tool_kinematics_param.toolInEndPosition = {x:0.0, y:0.0, z:0.61};
-        tool_kinematics_param.toolInEndOrientation = {w:1.0, x:0.0, y:0.0, z:0.0};
-        int result = robot_send_service_.robotServiceSetToolKinematicsParam(tool_kinematics_param);
-        ROS_INFO("set tool kinematics params result %d", result);
-
         // set jog control end-tool coordinate
         aubo_robot_namespace::CoordCalibrateByJointAngleAndTool tool_coordinate;
         tool_coordinate.coordType = aubo_robot_namespace::EndCoordinate;
-        result = robot_send_service_.robotServiceSetTeachCoordinateSystem(tool_coordinate);
+        int result = robot_send_service_.robotServiceSetTeachCoordinateSystem(tool_coordinate);
         ROS_INFO("set teach coordinate system result %d", result);
-
-        robot_send_service_.robotServiceGetToolKinematicsParam(tool_kinematics_param);
-        ROS_INFO("get twist message");
-        ROS_INFO("XYZ %.3f, %.3f, %.3f; WXYZ %.3f, %.3f, %.3f, %.3f",
-                    tool_kinematics_param.toolInEndPosition.x, tool_kinematics_param.toolInEndPosition.y, tool_kinematics_param.toolInEndPosition.z,
-                    tool_kinematics_param.toolInEndOrientation.w, tool_kinematics_param.toolInEndOrientation.x, tool_kinematics_param.toolInEndOrientation.y, tool_kinematics_param.toolInEndOrientation.z);
 
         ret = robot_receive_service_.robotServiceGetCurrentWaypointInfo(rs.wayPoint_);
         if(ret == aubo_robot_namespace::InterfaceCallSuccCode)
@@ -956,12 +944,12 @@ bool AuboDriver::getIK(aubo_msgs::GetIKRequest& req, aubo_msgs::GetIKResponse& r
 
 bool AuboDriver::updateToolParam(aubo_msgs::UpdateToolParamRequest& req, aubo_msgs::UpdateToolParamResponse& resp)
 {
-    int result;
+    int result = -1;
 
     aubo_robot_namespace::ToolKinematicsParam tool_kinematics_param;
     tool_kinematics_param.toolInEndPosition = {x:req.pose.translation.x, y:req.pose.translation.y, z:req.pose.translation.z};
     tool_kinematics_param.toolInEndOrientation = {w:req.pose.rotation.w, x:req.pose.rotation.x, y:req.pose.rotation.y, z:req.pose.rotation.z};
-    // result = robot_send_service_.robotServiceSetToolKinematicsParam(tool_kinematics_param);
+    result = robot_send_service_.robotServiceSetToolKinematicsParam(tool_kinematics_param);
     ROS_INFO("set tool kinematics params result %d", result);
     ROS_INFO("tool kinematics param: XYZ %.3f %.3f %.3f, WXYZ %.3f %.3f %.3f %.3f",
             tool_kinematics_param.toolInEndPosition.x, tool_kinematics_param.toolInEndPosition.y, tool_kinematics_param.toolInEndPosition.z,
@@ -978,7 +966,7 @@ bool AuboDriver::updateToolParam(aubo_msgs::UpdateToolParamRequest& req, aubo_ms
     tool_dynamics_param.positionZ = req.inertia.com.z;
     tool_dynamics_param.payload = req.inertia.m;
     tool_dynamics_param.toolInertia = {xx:req.inertia.ixx, xy:req.inertia.ixy, xz:req.inertia.ixz, yy:req.inertia.iyy, yz:req.inertia.iyz, zz:req.inertia.izz};
-    // result = robot_send_service_.robotServiceSetToolDynamicsParam(tool_dynamics_param);
+    result = robot_send_service_.robotServiceSetToolDynamicsParam(tool_dynamics_param);
     ROS_INFO("set tool dynamics params result %d", result);
     ROS_INFO("tool dynamics param: Mass %.3f, COM %.3f %.3f %.3f, Inertia %.3f %.3f %.3f %.3f %.3f %.3f",
             tool_dynamics_param.payload,
